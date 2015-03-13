@@ -20,6 +20,15 @@ class Vector(list):
     def __str__(self):
         return "[" + " ".join(str(c) for c in self) + "]"
 
+    def __op(self, a, op):
+        try:
+            return self.__class__(op(c,e) for c,e in zip(self, a))
+        except TypeError:
+            return self.__class__(op(c,a) for c in self)
+
+    def __add__(self, a): return self.__op(a, lambda c,d: c+d)
+    def __sub__(self, a): return self.__op(a, lambda c,d: c-d)
+
 class Calc(tpg.Parser):
     r"""
 
