@@ -18,6 +18,7 @@ class Calc(tpg.Parser):
 
     separator spaces: '\s+' ;
 
+    token fnumber: '\d+[.]\d*' float ;
     token number: '\d+' int ;
     token add: '[+-]' make_op ;
     token mul: '[*/]' make_op ;
@@ -25,7 +26,7 @@ class Calc(tpg.Parser):
     START/e -> Term/e ;
     Term/t -> Fact/t ( add/op Fact/f $t=op(t,f)$ )* ;
     Fact/f -> Atom/f ( mul/op Atom/a $f=op(f,a)$ )* ;
-    Atom/a -> number/a | '\(' Term/a '\)' ;
+    Atom/a -> fnumber/a | number/a | '\(' Term/a '\)' ;
 
     """
 
