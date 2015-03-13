@@ -13,6 +13,13 @@ def make_op(s):
         '/': lambda x,y: x/y,
     }[s]
 
+class Vector:
+    def __init__(self, *args):
+        self.array = args
+
+    def __str__(self):
+        return "|" + " ".join(str(c) for c in self.array) + "|"
+
 class Calc(tpg.Parser):
     r"""
 
@@ -20,13 +27,15 @@ class Calc(tpg.Parser):
 
     token fnumber: '\d+[.]\d*' float ;
     token number: '\d+' int ;
-    token add: '[+-]' make_op ;
-    token mul: '[*/]' make_op ;
+    token op1: '[+-]' make_op ;
+    token op2: '[*/]' make_op ;
 
-    START/e -> Term/e ;
-    Term/t -> Fact/t ( add/op Fact/f $t=op(t,f)$ )* ;
-    Fact/f -> Atom/f ( mul/op Atom/a $f=op(f,a)$ )* ;
-    Atom/a -> fnumber/a | number/a | '\(' Term/a '\)' ;
+    START/e -> Expr/e ;
+    Expr/t -> Fact/t ( op1/op Fact/f $t=op(t,f)$ )* ;
+    Fact/f -> Atom/f ( op2/op Atom/a $f=op(f,a)$ )* ;
+    Atom/a -> Vector/a | fnumber/a | number/a | '\(' Expr/a '\)' ;
+    Vector/$Vector(*a)$ -> '\[' '\]' $a=[]$ | '\[' Atoms/a '\]' ;
+    Atoms/v -> Atom/a Atoms/t $v=[a]+t$ | Atom/a $v=[a]$ ;
 
     """
 
