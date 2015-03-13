@@ -33,13 +33,14 @@ class Calc(tpg.Parser):
     r"""
 
     separator spaces: '\s+' ;
+    separator comment: '#.*' ;
 
     token fnumber: '\d+[.]\d*' float ;
     token number: '\d+' int ;
     token op1: '[+-]' make_op ;
     token op2: '[*/]' make_op ;
 
-    START/e -> Expr/e ;
+    START/e -> Expr/e | $e=None$ ;
     Expr/t -> Fact/t ( op1/op Fact/f $t=op(t,f)$ )* ;
     Fact/f -> Atom/f ( op2/op Atom/a $f=op(f,a)$ )* ;
     Atom/a -> Vector/a | fnumber/a | number/a | '\(' Expr/a '\)' ;
@@ -54,4 +55,6 @@ PS1='--> '
 Stop=False
 while not Stop:
     line = raw_input(PS1)
-    print calc(line)
+    res = calc(line)
+    if res != None:
+        print res
