@@ -25,7 +25,7 @@ class Vector(list):
 
     def __op(self, a, op):
         try:
-            return self.__class__(map(op, zip(self, a)))
+            return self.__class__(op(s,e) for s,e in zip(self, a))
         except TypeError:
             return self.__class__(op(c,a) for c in self)
 
@@ -72,6 +72,10 @@ PS1='--> '
 Stop=False
 while not Stop:
     line = raw_input(PS1)
-    res = calc(line)
+    try:
+        res = calc(line)
+    except tpg.LexicalError as exc:
+        print >> sys.stderr, exc
+        res = None
     if res != None:
         print res
