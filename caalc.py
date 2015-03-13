@@ -32,7 +32,7 @@ class Vector(list):
     def __add__(self, a): return self.__op(a, lambda c,d: c+d)
     def __sub__(self, a): return self.__op(a, lambda c,d: c-d)
     def __div__(self, a): return self.__op(a, lambda c,d: c/d)
-    def __mul__(self, a): return self.__op(a, lambda c,d: c/d)
+    def __mul__(self, a): return self.__op(a, lambda c,d: c*d)
 
     def __and__(self, a):
         try:
@@ -54,19 +54,27 @@ class Calc(tpg.Parser):
 
     token fnumber: '\d+[.]\d*' float ;
     token number: '\d+' int ;
-    token op1: '[&+-]' make_op ;
-    token op2: '[|*/]' make_op ;
+    token op1: '[|&+-]' make_op ;
+    token op2: '[*/]' make_op ;
+    token id: '\w+' ;
 
-    START/e -> Expr/e | $e=None$ ;
+    START/e -> Operator $e=None$ | Expr/e | $e=None$ ;
+    Operator -> Assign ;
+    Assign -> id/i '=' Expr/e $Vars[i]=e$ ;
     Expr/t -> Fact/t ( op1/op Fact/f $t=op(t,f)$ )* ;
     Fact/f -> Atom/f ( op2/op Atom/a $f=op(f,a)$ )* ;
-    Atom/a -> Vector/a | fnumber/a | number/a | '\(' Expr/a '\)' ;
+    Atom/a ->   Vector/a
+              | id/i ( check $i in Vars$ | error $"Undefined variable '{}'".format(i)$ ) $a=Vars[i]$
+              | fnumber/a
+              | number/a
+              | '\(' Expr/a '\)' ;
     Vector/$Vector(a)$ -> '\[' '\]' $a=[]$ | '\[' Atoms/a '\]' ;
     Atoms/v -> Atom/a Atoms/t $v=[a]+t$ | Atom/a $v=[a]$ ;
 
     """
 
 calc = Calc()
+Vars={}
 PS1='--> '
 
 Stop=False
@@ -74,7 +82,7 @@ while not Stop:
     line = raw_input(PS1)
     try:
         res = calc(line)
-    except tpg.LexicalError as exc:
+    except tpg.Error as exc:
         print >> sys.stderr, exc
         res = None
     if res != None:
