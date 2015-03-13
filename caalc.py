@@ -4,6 +4,7 @@
 import readline
 import sys
 import tpg
+import itertools
 
 def make_op(s):
     return {
@@ -11,6 +12,8 @@ def make_op(s):
         '-': lambda x,y: x-y,
         '*': lambda x,y: x*y,
         '/': lambda x,y: x/y,
+        '&': lambda x,y: x&y,
+        '|': lambda x,y: x|y,
     }[s]
 
 class Vector(list):
@@ -22,12 +25,26 @@ class Vector(list):
 
     def __op(self, a, op):
         try:
-            return self.__class__(op(c,e) for c,e in zip(self, a))
+            return self.__class__(map(op, zip(self, a)))
         except TypeError:
             return self.__class__(op(c,a) for c in self)
 
     def __add__(self, a): return self.__op(a, lambda c,d: c+d)
     def __sub__(self, a): return self.__op(a, lambda c,d: c-d)
+    def __div__(self, a): return self.__op(a, lambda c,d: c/d)
+    def __mul__(self, a): return self.__op(a, lambda c,d: c/d)
+
+    def __and__(self, a):
+        try:
+            return reduce(lambda s, (c,d): s+c*d, zip(self, a), 0)
+        except TypeError:
+            return self.__class__(c and a for c in self)
+
+    def __or__(self, a):
+        try:
+            return self.__class__(itertools.chain(self, a))
+        except TypeError:
+            return self.__class__(c or a for c in self)
 
 class Calc(tpg.Parser):
     r"""
@@ -37,8 +54,8 @@ class Calc(tpg.Parser):
 
     token fnumber: '\d+[.]\d*' float ;
     token number: '\d+' int ;
-    token op1: '[+-]' make_op ;
-    token op2: '[*/]' make_op ;
+    token op1: '[&+-]' make_op ;
+    token op2: '[|*/]' make_op ;
 
     START/e -> Expr/e | $e=None$ ;
     Expr/t -> Fact/t ( op1/op Fact/f $t=op(t,f)$ )* ;
