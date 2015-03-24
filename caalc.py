@@ -46,6 +46,7 @@ class Vector(list):
         except TypeError:
             return self.__class__(c or a for c in self)
 
+class Matrix:
 class Calc(tpg.Parser):
     r"""
 
@@ -64,11 +65,14 @@ class Calc(tpg.Parser):
     Expr/t -> Fact/t ( op1/op Fact/f $t=op(t,f)$ )* ;
     Fact/f -> Atom/f ( op2/op Atom/a $f=op(f,a)$ )* ;
     Atom/a ->   Vector/a
+              | Matrix/a
               | id/i ( check $i in Vars$ | error $"Undefined variable '{}'".format(i)$ ) $a=Vars[i]$
               | fnumber/a
               | number/a
               | '\(' Expr/a '\)' ;
     Vector/$Vector(a)$ -> '\[' '\]' $a=[]$ | '\[' Atoms/a '\]' ;
+    Matrix/$Matrix(a)$ -> '\[' Lines/a '\]'
+    Lines/l -> Atoms/v ; Lines/l $l=[v]+l$ | Atoms/v $l=[v]$
     Atoms/v -> Atom/a Atoms/t $v=[a]+t$ | Atom/a $v=[a]$ ;
 
     """
@@ -77,13 +81,30 @@ calc = Calc()
 Vars={}
 PS1='--> '
 
+if len(sys.argv) == 2: 
+    # It's script file
+    with open(sys.argv[1], 'r') as f:
+        linesIter = iter(f.readlines())
+    def get_line():
+        try:
+            return linesIter.next()
+        except:
+            raise EOFError
+elif len(sys.argv) == 1:
+    def get_line():
+        return raw_input(PS1)
+
 Stop=False
 while not Stop:
-    line = raw_input(PS1)
     try:
-        res = calc(line)
-    except tpg.Error as exc:
-        print >> sys.stderr, exc
-        res = None
-    if res != None:
-        print res
+        line = get_line()
+        try:
+            res = calc(line)
+        except tpg.Error as exc:
+            print >> sys.stderr, exc
+            res = None
+        if res != None:
+            print res
+    except EOFError:
+        Stop = True
+        print 
