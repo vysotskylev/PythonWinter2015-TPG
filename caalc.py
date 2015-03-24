@@ -47,9 +47,11 @@ class Vector(list):
             return self.__class__(c or a for c in self)
 
 class Matrix(list):
+    
     def __init__(self, *argp, **argn):
         list.__init__(self, *argp, **argn)
         if len(self) != 0:
+            
             for row in self:
                 if len(row) != len(self[0]):
                     raise TypeError("Rows must have equal lengths")
@@ -58,36 +60,24 @@ class Matrix(list):
         else:
             self.nrows = self.ncols = 0
     def __str__(self):
-        return "[" + " ".join(str(c) for c in self) + "]"
+        widths = [max(len(str(self[i][j])) for i in xrange(self.nrows)) for j in xrange(self.ncols)]
+        fmt = " ".join(" {:>" + str(w) + "}" for w in widths)
+        return "[" + ";\n ".join(fmt.format(*row) for row in self) + " ]"
 
-    def __op(self, a, op):
-        try:
-            return self.__class__(op(s,e) for s,e in zip(self, a))
-        except TypeError:
-            return self.__class__(op(c,a) for c in self)
+    def __elwiseop(self, a, op):
+        if self.nrows != a.nrows or self.ncols != a.ncols:
+            raise TypeError("Matrices must be of equal sizes, given {}x{} and {}x{}".format(self.nrows, self.ncols, a.nrows, a.ncols))
+        return Matrix([op(x, y) for x,y in zip(row1, row2)] for row1, row2 in zip(self, a))
 
-    def __add__(self, a): return self.__op(a, lambda c,d: c+d)
-    def __sub__(self, a): return self.__op(a, lambda c,d: c-d)
+    def __add__(self, a): return self.__elwiseop(a, lambda c,d: c+d)
+    def __sub__(self, a): return self.__elwiseop(a, lambda c,d: c-d)
     def __mul__(self, a): 
         if self.ncols != a.nrows:
             raise TypeError("Inconsistent matrix sizes: {}x{} and {}x{}".format(self.nrows, self.ncols, a.nrows, a.ncols))
-        res = list(
-                list(
-                    sum(self[i][j] * a[j][k] for j in xrange(self.ncols)) 
-                    for k in xrange(a.ncols)
-                ) for i in xrange(self.nrows))
+        return Matrix([sum(self[i][j] * a[j][k] for j in xrange(self.ncols)) 
+                        for k in xrange(a.ncols)]
+                      for i in xrange(self.nrows))
         return self.__class__(res) 
-    def __and__(self, a):
-        try:
-            return reduce(lambda s, (c,d): s+c*d, zip(self, a), 0)
-        except TypeError:
-            return self.__class__(c and a for c in self)
-
-    def __or__(self, a):
-        try:
-            return self.__class__(itertools.chain(self, a))
-        except TypeError:
-            return self.__class__(c or a for c in self)
 
 class Calc(tpg.Parser):
     r"""
@@ -97,7 +87,7 @@ class Calc(tpg.Parser):
 
     token fnumber: '\d+[.]\d*' float ;
     token number: '\d+' int ;
-    token op1: '[|&+-]' make_op ;
+    token op1: '[+-]' make_op ;
     token op2: '[*/]' make_op ;
     token id: '\w+' ;
 
