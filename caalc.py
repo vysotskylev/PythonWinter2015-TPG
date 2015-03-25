@@ -18,46 +18,46 @@ def make_op(s):
 
 
 class Promise(object):
-    def get(self):
+    def get(self, Vars):
         raise NotImplementedError()
 
 class PromMatrix(Promise):
     def __init__(self, m):
         self.m = m
-    def get(self):
-        return Matrix([x.get() for x in row] for row in self.m)
+    def get(self, Vars):
+        return Matrix([x.get(Vars) for x in row] for row in self.m)
 
 class PromOp(Promise):
     def __init__(self, op, *args):
         self.op = op
         self.args = args
-    def get(self):
-        return self.op(*(arg.get() for arg in self.args))
+    def get(self, Vars):
+        return self.op(*(arg.get(Vars) for arg in self.args))
 
 class PromVar(Promise):
     def __init__(self, varName):
         self.varName = varName
-    def get(self):
+    def get(self, Vars):
         return Vars[self.varName]
 
 class PromInt(Promise):
     def __init__(self, val):
         self.val = int(val)
-    def get(self):
+    def get(self, Vars):
         return self.val
 
 class PromFloat(Promise):
     def __init__(self, val):
         self.val = float(val)
-    def get(self):
+    def get(self, Vars):
         return self.val
 
 class PromFuncCall(Promise):
     def __init__(self, varProm, args):
         self.varProm = varProm
         self.args = args
-    def get(self):
-        return self.varProm.get().call([arg.get() for arg in self.args])
+    def get(self, Vars):
+        return self.varProm.get(Vars).call([arg.get(Vars) for arg in self.args])
 
 
 class Matrix(list):
@@ -117,11 +117,17 @@ class Matrix(list):
                       for i in xrange(self.nrows))
 
 class Func(object):
-    def __init__(self, args, promise):
+    def __init__(self, name, Vars, args, promise):
         self.formal = args
         self.promise = promise
+        self.Vars = Vars.copy()
+        self.Vars[name] = self
     def call(self,actual):
-        return self.promise.get()
+        if len(actual) != len(self.formal):
+            raise TypeError("Wrong number of arguments: given {}, expected {}".format(len(actual), len(self.formal)))
+        callVars = self.Vars.copy()
+        callVars.update(zip(self.formal, actual))
+        return self.promise.get(callVars)
 
 class Calc(tpg.Parser):
     r"""
@@ -130,7 +136,7 @@ class Calc(tpg.Parser):
     separator comment: '#.*' ;
 
     token fnumber: '\d+[.]\d*' PromFloat ;
-    token number: '\d+' PromInt ;
+    token number: '-?\d+' PromInt ;
     token op1: '[+-]' make_op ;
     token op2: '[*/]' make_op ;
     token id: '\w+' ;
@@ -138,7 +144,7 @@ class Calc(tpg.Parser):
     START/e ->  Operator $e=None$ | Expr/e | $e=None$ ;
     Operator -> Assign | FuncDecl;
 
-    FuncDecl -> 'fun ' id/f FormalArgs/a  '=' Expr/prom $Vars[f] = Func(a, prom)$;
+    FuncDecl -> 'fun' id/f FormalArgs/a  '=' Expr/prom $Vars[f] = Func(f, Vars, a, prom)$;
 
     FormalArgs/a -> ('\(\s*\)' $a=[]$ | '\(' FormalArgList/a '\)') ;
     FormalArgList/a -> id/i ',' FormalArgList/a $a=[i] + a$  | id/i $a=[i]$ ;
@@ -146,7 +152,7 @@ class Calc(tpg.Parser):
     ActualArgs/a -> ('\(\s*\)' $a=[]$ | '\(' ActualArgList/a '\)') ;
     ActualArgList/a -> Atom/i ',' ActualArgList/a $a=[i] + a$  | Atom/i $a=[i]$ ;
 
-    Assign -> id/i '=' Expr/e $Vars[i]=(e.get()) $ ;
+    Assign -> id/i '=' Expr/e $Vars[i]=e.get(Vars) $ ;
     Expr/t -> Fact/t ( op1/op Fact/f $t=PromOp(op, t,f)$ )* ;
     Fact/f -> Atom/f ActualArgs/a $f=PromFuncCall(f,a)$ | Atom/f ( op2/op Atom/a $f=PromOp(op, f,a)$ )* ;
     Atom/a ->   Matrix/a
@@ -165,30 +171,26 @@ Vars={}
 
 PS1='--> '
 
-if len(sys.argv) == 2: 
-    # It's script file
-    with open(sys.argv[1], 'r') as f:
-        linesIter = iter(f.readlines())
-    def get_line():
+def get_line():
+    if len(sys.argv) == 2: 
+        # It's script file
+        with open(sys.argv[1], 'r') as f:
+            for l in iter(f.readline, ''):
+                yield l
+    else:
         try:
-            return linesIter.next()
-        except:
-            raise EOFError
-elif len(sys.argv) == 1:
-    def get_line():
-        return raw_input(PS1)
-
-Stop=False
-while not Stop:
+            while True: yield raw_input(PS1)
+        except EOFError:
+            print
+            return
+for line in get_line():
     try:
-        line = get_line()
-        try:
-            res = calc(line)
-        except tpg.Error as exc:
-            print >> sys.stderr, exc
-            res = None
-        if res != None:
-            print res.get()
-    except EOFError:
-        Stop = True
-        print 
+        res = calc(line)
+    except tpg.Error as exc:
+        print >> sys.stderr, exc
+        res = None
+    except TypeError as e:
+        print >> sys.stderr, "Error: " + str(e)
+        res = None
+    if res != None:
+        print res.get(Vars)

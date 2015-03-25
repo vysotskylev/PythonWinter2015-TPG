@@ -1,0 +1,12 @@
+2+2
+-4+5
+A=[1 2; 3 4]
+b =[1;2]
+A*b
+m = [A b]
+m
+A*A
+fun mulByb(mat) = mat * b
+mulByb(A)
+b=[0;0]
+mulByb(A) # lexical scope
