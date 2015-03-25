@@ -47,14 +47,38 @@ class Vector(list):
             return self.__class__(c or a for c in self)
 
 class Matrix(list):
-    
+    @staticmethod
+    def __blockMatrix(M):
+        s = [[((m.nrows, m.ncols) if m.__class__ == Matrix else (1,1)) for m in row] for row in M]
+        for row in s:
+            for i in xrange(1, len(row)):
+                if row[i][0] != row[i-1][0]: 
+                    raise TypeError("Inconsistent sizes in block matrix construction")
+        for j in xrange(len(s[0])):
+            for i in xrange(1,len(s)):
+                if s[i][j][1] != s[i-1][j][1]:
+                    raise TypeError("Inconsistent sizes in block matrix construction")
+        nrows = sum(row[0][0] for row in s)
+        ncols = sum(x[1] for x in s[0])
+        new = [[] for  i in xrange(nrows)]
+        offi = 0
+        for rowidx, row in enumerate(M):
+            for m in row:
+                if m.__class__ == Matrix:
+                    for i, row in enumerate(m):
+                        new[offi + i].extend(row)
+                else:
+                    new[offi].append(m)
+            offi += s[rowidx][0][0]
+        return new
+
     def __init__(self, *argp, **argn):
         list.__init__(self, *argp, **argn)
         if len(self) != 0:
-            
             for row in self:
                 if len(row) != len(self[0]):
                     raise TypeError("Rows must have equal lengths")
+            list.__init__(self, Matrix.__blockMatrix(self))
             self.nrows = len(self)
             self.ncols = len(self[0])
         else:
