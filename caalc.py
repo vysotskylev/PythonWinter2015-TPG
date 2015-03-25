@@ -25,15 +25,14 @@ class PromMatrix(Promise):
     def __init__(self, m):
         self.m = m
     def get(self):
-        return Matrix([(x.get() if isinstance(x, Promise) else x) 
-                         for x in row] for row in self.m)
+        return Matrix([x.get() for x in row] for row in self.m)
 
 class PromOp(Promise):
     def __init__(self, op, *args):
         self.op = op
         self.args = args
     def get(self):
-        return self.op(*(arg.get() if isinstance(arg, Promise) else arg for arg in self.args))
+        return self.op(*(arg.get() for arg in self.args))
 
 class PromVar(Promise):
     def __init__(self, varName):
@@ -41,12 +40,24 @@ class PromVar(Promise):
     def get(self):
         return Vars[self.varName]
 
-class PromAssign(Promise):
-    def __init__(self, varName, val):
-        self.varName = varName
-        self.val = val
+class PromInt(Promise):
+    def __init__(self, val):
+        self.val = int(val)
     def get(self):
-        Vars[self.varName] = (self.val.get() if isinstance(self.val, Promise) else self.val)
+        return self.val
+
+class PromFloat(Promise):
+    def __init__(self, val):
+        self.val = float(val)
+    def get(self):
+        return self.val
+
+class PromFuncCall(Promise):
+    def __init__(self, varProm, args):
+        self.varProm = varProm
+        self.args = args
+    def get(self):
+        return self.varProm.get().call([arg.get() for arg in self.args])
 
 
 class Matrix(list):
@@ -105,29 +116,44 @@ class Matrix(list):
                         for k in xrange(a.ncols)]
                       for i in xrange(self.nrows))
 
+class Func(object):
+    def __init__(self, args, promise):
+        self.formal = args
+        self.promise = promise
+    def call(self,actual):
+        return self.promise.get()
+
 class Calc(tpg.Parser):
     r"""
 
     separator spaces: '\s+' ;
     separator comment: '#.*' ;
 
-    token fnumber: '\d+[.]\d*' float ;
-    token number: '\d+' int ;
+    token fnumber: '\d+[.]\d*' PromFloat ;
+    token number: '\d+' PromInt ;
     token op1: '[+-]' make_op ;
     token op2: '[*/]' make_op ;
     token id: '\w+' ;
 
-    START/e -> Operator $e=None$ | Expr/e | $e=None$ ;
+    START/e ->  Operator $e=None$ | Expr/e | $e=None$ ;
     Operator -> Assign | FuncDecl;
-    FuncDecl -> 'fun' ;
-    Assign -> id/i '=' Expr/e $Vars[i]=(e.get() if isinstance(e, Promise) else e) $ ;
+
+    FuncDecl -> 'fun ' id/f FormalArgs/a  '=' Expr/prom $Vars[f] = Func(a, prom)$;
+
+    FormalArgs/a -> ('\(\s*\)' $a=[]$ | '\(' FormalArgList/a '\)') ;
+    FormalArgList/a -> id/i ',' FormalArgList/a $a=[i] + a$  | id/i $a=[i]$ ;
+
+    ActualArgs/a -> ('\(\s*\)' $a=[]$ | '\(' ActualArgList/a '\)') ;
+    ActualArgList/a -> Atom/i ',' ActualArgList/a $a=[i] + a$  | Atom/i $a=[i]$ ;
+
+    Assign -> id/i '=' Expr/e $Vars[i]=(e.get()) $ ;
     Expr/t -> Fact/t ( op1/op Fact/f $t=PromOp(op, t,f)$ )* ;
-    Fact/f -> Atom/f ( op2/op Atom/a $f=PromOp(op, f,a)$ )* ;
+    Fact/f -> Atom/f ActualArgs/a $f=PromFuncCall(f,a)$ | Atom/f ( op2/op Atom/a $f=PromOp(op, f,a)$ )* ;
     Atom/a ->   Matrix/a
               | id/i  $a=PromVar(i)$
               | fnumber/a
               | number/a
-              | '\(' Expr/a '\)' ;
+              | '\(' Expr/a '\)';
     Matrix/$PromMatrix(a)$ -> '\[' '\]' $a=[]$ | '\[' Lines/a '\]' ;
     Lines/l -> Atoms/v ';' Lines/l $l=[v]+l$ | Atoms/v $l=[v]$ ;
     Atoms/v -> Atom/a Atoms/t $v=[a]+t$ | Atom/a $v=[a]$ ;
@@ -136,6 +162,7 @@ class Calc(tpg.Parser):
 
 calc = Calc()
 Vars={}
+
 PS1='--> '
 
 if len(sys.argv) == 2: 
