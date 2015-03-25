@@ -16,40 +16,43 @@ def make_op(s):
         '|': lambda x,y: x|y,
     }[s]
 
-class Vector(list):
-    def __init__(self, *argp, **argn):
-        list.__init__(self, *argp, **argn)
 
-    def __str__(self):
-        return "[" + " ".join(str(c) for c in self) + "]"
+class Promise(object):
+    def get(self):
+        raise NotImplementedError()
 
-    def __op(self, a, op):
-        try:
-            return self.__class__(op(s,e) for s,e in zip(self, a))
-        except TypeError:
-            return self.__class__(op(c,a) for c in self)
+class PromMatrix(Promise):
+    def __init__(self, m):
+        self.m = m
+    def get(self):
+        return Matrix([(x.get() if isinstance(x, Promise) else x) 
+                         for x in row] for row in self.m)
 
-    def __add__(self, a): return self.__op(a, lambda c,d: c+d)
-    def __sub__(self, a): return self.__op(a, lambda c,d: c-d)
-    def __div__(self, a): return self.__op(a, lambda c,d: c/d)
-    def __mul__(self, a): return self.__op(a, lambda c,d: c*d)
+class PromOp(Promise):
+    def __init__(self, op, *args):
+        self.op = op
+        self.args = args
+    def get(self):
+        return self.op(*(arg.get() if isinstance(arg, Promise) else arg for arg in self.args))
 
-    def __and__(self, a):
-        try:
-            return reduce(lambda s, (c,d): s+c*d, zip(self, a), 0)
-        except TypeError:
-            return self.__class__(c and a for c in self)
+class PromVar(Promise):
+    def __init__(self, varName):
+        self.varName = varName
+    def get(self):
+        return Vars[self.varName]
 
-    def __or__(self, a):
-        try:
-            return self.__class__(itertools.chain(self, a))
-        except TypeError:
-            return self.__class__(c or a for c in self)
+class PromAssign(Promise):
+    def __init__(self, varName, val):
+        self.varName = varName
+        self.val = val
+    def get(self):
+        Vars[self.varName] = (self.val.get() if isinstance(self.val, Promise) else self.val)
+
 
 class Matrix(list):
     @staticmethod
     def __blockMatrix(M):
-        s = [[((m.nrows, m.ncols) if m.__class__ == Matrix else (1,1)) for m in row] for row in M]
+        s = [[((m.nrows, m.ncols) if isinstance(m, Matrix) else (1,1)) for m in row] for row in M]
         for row in s:
             for i in xrange(1, len(row)):
                 if row[i][0] != row[i-1][0]: 
@@ -64,7 +67,7 @@ class Matrix(list):
         offi = 0
         for rowidx, row in enumerate(M):
             for m in row:
-                if m.__class__ == Matrix:
+                if isinstance(m, Matrix):
                     for i, row in enumerate(m):
                         new[offi + i].extend(row)
                 else:
@@ -101,7 +104,6 @@ class Matrix(list):
         return Matrix([sum(self[i][j] * a[j][k] for j in xrange(self.ncols)) 
                         for k in xrange(a.ncols)]
                       for i in xrange(self.nrows))
-        return self.__class__(res) 
 
 class Calc(tpg.Parser):
     r"""
@@ -116,16 +118,17 @@ class Calc(tpg.Parser):
     token id: '\w+' ;
 
     START/e -> Operator $e=None$ | Expr/e | $e=None$ ;
-    Operator -> Assign ;
-    Assign -> id/i '=' Expr/e $Vars[i]=e$ ;
-    Expr/t -> Fact/t ( op1/op Fact/f $t=op(t,f)$ )* ;
-    Fact/f -> Atom/f ( op2/op Atom/a $f=op(f,a)$ )* ;
+    Operator -> Assign | FuncDecl;
+    FuncDecl -> 'fun' ;
+    Assign -> id/i '=' Expr/e $Vars[i]=(e.get() if isinstance(e, Promise) else e) $ ;
+    Expr/t -> Fact/t ( op1/op Fact/f $t=PromOp(op, t,f)$ )* ;
+    Fact/f -> Atom/f ( op2/op Atom/a $f=PromOp(op, f,a)$ )* ;
     Atom/a ->   Matrix/a
-              | id/i ( check $i in Vars$ | error $"Undefined variable '{}'".format(i)$ ) $a=Vars[i]$
+              | id/i  $a=PromVar(i)$
               | fnumber/a
               | number/a
               | '\(' Expr/a '\)' ;
-    Matrix/$Matrix(a)$ -> '\[' '\]' $a=[]$ | '\[' Lines/a '\]' ;
+    Matrix/$PromMatrix(a)$ -> '\[' '\]' $a=[]$ | '\[' Lines/a '\]' ;
     Lines/l -> Atoms/v ';' Lines/l $l=[v]+l$ | Atoms/v $l=[v]$ ;
     Atoms/v -> Atom/a Atoms/t $v=[a]+t$ | Atom/a $v=[a]$ ;
 
@@ -158,7 +161,7 @@ while not Stop:
             print >> sys.stderr, exc
             res = None
         if res != None:
-            print res
+            print res.get()
     except EOFError:
         Stop = True
         print 
