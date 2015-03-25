@@ -10,3 +10,4 @@ fun mulByb(mat) = mat * b
 mulByb(A)
 b=[0;0]
 mulByb(A) # lexical scope
+
